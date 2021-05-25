@@ -1,2 +1,2 @@
 # OpenCMS
-Protein database (Fasta) generator from transcriptomic and genomic information
+Custom Mass Spectrometry library
