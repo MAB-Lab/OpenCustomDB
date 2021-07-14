@@ -1,288 +1,222 @@
-from OpenCMS.utils import *
-from OpenCMS.SNP_handle import *
-OP_protein_fasta = '/home/noeguill/OpenCMS/Databases/OpenProt_DB_Ensemble_1_6.fasta'
-transcrit_fasta = '/home/noeguill/OpenCMS/Databases/gencode.v29.transcripts.fa'
-OP_tsv = '/home/noeguill/OpenCMS/Databases/human-openprot-r1_6-refprots+altprots+isoforms-ensembleonly.tsv'
+import itertools as itt
+import numpy as np
+import gzip
+import re
+import collections
+import Bio
+import pyfaidx
+import pickle
+import sys
+from pyfaidx import FastaVariant, Fasta
+from Bio import SeqIO
+from collections import defaultdict
+from collections import Counter
+from collections import OrderedDict
+from operator import itemgetter
+from OpenVar.openvar import SeqStudy, OpenVar, OPVReport
 
-class OpenCMS:
-    def __init__(self, 
-    vcf_path,
-    expname,
-    input_kallisto = None,
-    trxnumber = None,          #10000-1000000
-    tpmnumber = None,          #0-1000000
-    ipban = None,              #yes
-    trxsave = None,
-    trxexclude = None,
-    annotation='ensembl'):
-        self.vcf_path = vcf_path
-        self.expname = expname
-        self.input_kallisto = input_kallisto
-        self.trxnumber = trxnumber
-        self.tpmnumber = tpmnumber
-        self.annotation=annotation
-        self.ipban = ipban
-        self.trxsave = trxsave
-        self.trxexclude = trxexclude
+AAcode = {
+    'Gly':'G','Glu':'E','Asp':'D','Ala':'A','Val':'V',
+    'Arg':'R','Ser':'S','Lys':'K','Asn':'N','Thr':'T',
+    'Met':'M','Ile':'I','Gln':'Q','His':'H','Pro':'P',
+    'Leu':'L','Trp':'W','Cys':'C','Tyr':'Y','Ser':'S','Phe':'F','*':'*', 'Ter':'*'}
 
-    def run(self, verbose=True):
-        if verbose:
-            print('checking files')
-        checkex = checking_trx_files(self.trxexclude)
-        checksv = checking_trx_files(self.trxsave)
-        checkka = abundance_check(self.input_kallisto)
-        if checkex = False:
-            return print('Make sure your exclusion transcrit file is well written')
-        if checksv = False:
-            return print('Make sure your save transcrit file is well written')
-        if checksv = False:
-            return print('Make sure your kallisto-quant file is not corrupted')
-        print('running Openvar...')
-        parsed_snpeff = OpenVar_analysis(self.vcf_path, self.expname)
-        print('Parsing...')
-        protvariantfile = get_protvcf_file(parsed_snpeff, self.expname, self.vcf_path)
-        print('..Done')
-        print('calculs...')
-        prot_syno = get_synonyms_prot(OP_protein_fasta)
-        start_codon = get_start_codon(OP_tsv, transcrit_fasta)
-        fasta_dict = get_fasta_dict(OP_protein_fasta)
-        var_by_prot,transcrit_prot = parse_protvcf_file(protvariantfile)
-        seqname_seq = get_all_mut_sequences(var_by_prot,transcrit_prot,start_codon,fasta_dict,prot_syno,self.ipban)
-        print('phase2')
-        if self.input_kallisto:
-            print('started')
-            trx_allprot= append_wt_prot_to_transcrit_by_fasta(OP_protein_fasta,self.ipban)
-            print('append_wt_prot_to_transcrit_ENS done')
-            trx_allprot= get_mutated_protbytranscrit(seqname_seq,transcrit_prot,trx_allprot)
-            print('get_mutated_protbytranscrit done')
-            AllProtInMyDB,  effective_threshold = get_100_prot(self.input_kallisto, prot_syno,trx_allprot, self.trxnumber, self.trxsave, self.tpmnumber, self.trxexclude)
-            DB_custom = assembling_headers_sequences(AllProtInMyDB,seqname_seq,prot_syno,fasta_dict)
-            DB_custom = remove_duplicata_from_db(DB_custom)
-            write_Fasta_DB(DB_custom, self.expname, self.vcf_path,effective_threshold)
+gencode = {
+    'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+    'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+    'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+    'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+    'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+    'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+    'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+    'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+    'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+    'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+    'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+    'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+    'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+    'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+    'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+    'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W'}
 
-def abundance_check(input_kallisto):
-    if input_kallisto:
-        with open(input_kallisto, 'r') as f:
-            for n,l in enumerate(f):
-                if n == 0:
-                    if l != 'target_id\tlength\teff_length\test_counts\ttpm\n':
-                        return False
-                else:
-                    if len(l.split('\t'))!=4:
-                        return False
-    return True
+fields = ['OS', 'GN', 'TA', 'PA']
 
-def checking_trx_files(trxfile):
-    if trxfile:
-        with open(trxfile, 'r') as f:
-            for n,l in enumerate(f):
-                if l[0:4] != 'ENST' and if l[0:3] != 'NM_' and if l[0:3] != 'XM_':
-                    return False
-                if len(l)>40
-                    return False
-    return True
-
-def get_all_mut_sequences(var_by_prot,transcrit_prot,start_codon,fasta_dict,prot_syno,ipban):
-    seqname_seq=dict()
-    for acc,svar in var_by_prot.items():
-        if ipban=='yes':
-            if acc[0:3]=='II_' or acc [0:3]=='IP_':continue
-        regroupement_HGVS_C = list()
-        regroupement_HGVS_P = list()
-        for var in svar:
-            parsed_HGVS_C = Parse_HGVS_C(var['HGVS_C'])
-            parsed_HGVS_P = var['HGVS_P'].split('.',1)[1]
-            regroupement_HGVS_C.extend(parsed_HGVS_C)
-            regroupement_HGVS_P.append(parsed_HGVS_P)
-        sorted_HGVS_C = sort_sequences(regroupement_HGVS_C)
-        seqname = acc+'@'+''.join(regroupement_HGVS_P)
-        mutated_sequence = modify_transcript_sequence(sorted_HGVS_C,acc,transcrit_prot,start_codon)
-        translated_mutated_sequence = translate(mutated_sequence)
-        if 'synonymous_variant' in mutated_sequence or translated_mutated_sequence == 'start_lost' or len(translated_mutated_sequence)<7:continue
-        elif translated_mutated_sequence in seqname_seq.values():continue
-        else:
-            seqname_seq[seqname]=translated_mutated_sequence
-    seqname_seq=remove_fakevariant(seqname_seq,fasta_dict,prot_syno)
-    return seqname_seq
-
-def append_wt_prot_to_transcrit_by_fasta (fasta,ipban):
-    trx_allprot = defaultdict(list)
-    with open(fasta, 'r')as f:
+def get_synonyms_prot(fasta_prot):
+    with open(fasta_prot,'r')as f:
+        prot_syno = dict()
         for n,l in enumerate(f):
-            if '>' not in l:continue
-            parsedheader=parse_fasta_header(l)
-            trxs=parsedheader['TA'].split(',')
-            prxs=parsedheader['PA'].split(',')
-            for trx in trxs:
-                for prx in prxs:
-                    if ipban == "yes":
-                        if prx[0:3]=='II_' or prx [0:3]=='IP_':continue
-                    trx_allprot[trx.split('.')[0]].append(prx.split('.')[0])
-    return trx_allprot
-
-def get_100_prot(trx_expression,prot_syno,trx_allprot,trxnumber,trxsave,tpmnumber,trxexclude):
-    trx_expression_sorted = get_trxs_by_tpm_from_kallisto(trx_expression,trxexclude)
-    AllProtInMyDB = set()
+            if '>' in l:
+                prot = l.split('|',1)[0].split('.',1)[0].strip('>')
+                parsed = parse_fasta_header(l)
+                syn = parsed['PA'].split(',')
+                for x in syn:
+                    prot_syno[x.split('.',1)[0]]=prot
+    return prot_syno
     
-    if trxnumber:
-        treshold = trxnumber
-    else:
-        treshold = 100000
-    for prot,tpm in trx_expression_sorted.items():
-        if tpmnumber:
-            if tpm<tpmnumber:continue
-            for y in trx_allprot[prot]:    
-                if len(AllProtInMyDB)<treshold:
-                    if y in prot_syno:
-                        if prot_syno[y] not in AllProtInMyDB:
-                            AllProtInMyDB.add(prot_syno[y])
-                    else:
-                        AllProtInMyDB.add(y)
-                    if y not in AllProtInMyDB and prot_syno[y] not in AllProtInMyDB:
-                        print('not_taken',prot,y)
-                else:
-                    print(prot,tpm)
-                    return(AllProtInMyDB,tpm)
-        else:
-            for y in trx_allprot[prot]:    
-                if len(AllProtInMyDB)<treshold:
-                    if y in prot_syno:
-                        if prot_syno[y] not in AllProtInMyDB:
-                            AllProtInMyDB.add(prot_syno[y])
-                    else:
-                        AllProtInMyDB.add(y)
-                    if y not in AllProtInMyDB and prot_syno[y] not in AllProtInMyDB:
-                        print('not_taken',prot,y)
-                else:
-                    print(prot,tpm)
-                    return(AllProtInMyDB,tpm)
-    if trxsave:
-        with open(trxsave, 'r') as f:
-            for n,l in enumerate(f):
-                for y in trx_allprot[l.split('.')[0]]:
-                    if y in prot_syno:
-                        if prot_syno[y] not in AllProtInMyDB:
-                            AllProtInMyDB.add(prot_syno[y])
-                    else:
-                        AllProtInMyDB.add(y)
-    print(prot,tpm)            
-    return(AllProtInMyDB,tpm)
+def parse_fasta_header(h):
+    fields = ['OS', 'GN', 'TA', 'PA']
+    h = h.split()
+    acc = h[0].split('|')[0]
+    res = {}
+    for f in h[1:]:
+        for field in fields:
+            if f[:2] == field:
+                res[field] = f[3:]
+    return res
 
-def get_trxs_by_tpm_from_kallisto (trx_expression,trxexclude):
-    if trxexclude:
-        liste_exclusion = list()
-        with open(trxexclude, 'r') as fex:
-            for n,l in enumerate(fex):
-                liste_exclusion.append(l.split('\n')[0].split('.')[0])
-    else :
-        liste_exclusion = " "
+def get_accession_seqio(record):
+
+    parts = record.id.split("|")[0].split('.')
+    return parts[0]
+
+def get_fasta_dict(fasta_prot):
+    fasta_dict = SeqIO.to_dict(SeqIO.parse(fasta_prot, "fasta"), key_function=get_accession_seqio)
+    return fasta_dict
+
+def translate(mseq, frame=0):
+    mseq = mseq[frame:]
+    codons = [mseq[n:n+3] for n in range(0,len(mseq),3)]
+    translation = ''
+    if codons[0] != 'ATG':
+        return 'start_lost'
+    for codon in codons:
+        if len(codon)<3:
+            return translation
+        elif gencode[codon] == '_':
+            return translation
+        else:
+            translation += gencode[codon]
+    return translation
+
+def sort_sequences(hgvsc_snp):
+    ordre = {'replace':0,'del':1,'ins':2,'dup':2}
+    hgvsc_snp_sorted =sorted(hgvsc_snp, key=lambda x: (ordre[x['effect']],-x['pos']))
+    
+    return hgvsc_snp_sorted
+
+def remove_duplicata_from_db(DB_custom):
+    duplicata = list()
+    seek_duplicate = Counter(DB_custom.values())
+    for x,y in seek_duplicate.items():
+        if y>1:
+            if '@' in x:
+                duplicata.append(x)
+    for x in duplicata:
+        del DB_custom[x]
         
-    trxp_tpms = {}
-    with open(trx_expression, 'r') as f:
-        for n,l in enumerate(f):
-            ls = l.strip().split('\t')
-            if n==0:
-                keys = ls
-                continue
-            line = dict(zip(keys, ls))
-            trxp = line['target_id'].split('.')[0]
-            tpm = float(line['tpm'])
-            if tpm >0:
-                if trxp in liste_exclusion:continue
-                trxp_tpms[trxp] = tpm
-    trxp_tpms_sorted_pour_tresh = OrderedDict(sorted(trxp_tpms.items(), key=itemgetter(1), reverse=True))
-    return (trxp_tpms_sorted_pour_tresh)
-
-def get_mutated_protbytranscrit(seqname_seq,transcrit_prot,trx_allprot):
-    for prot_mut in seqname_seq:
-        for prot,transcrit in transcrit_prot.items():
-            if prot in prot_mut:
-                trx_allprot[transcrit].append(prot_mut)
-    return trx_allprot
-
-def modify_transcript_sequence(HGVS_C_snp_sorted,protacc,transcrit_prot,start_codon):
-    trx = str(transcrit_prot[protacc])
-    acc = protacc.split('.',1)[0]
-    mseq = [x for x in str(start_codon[acc+'^'+trx])]
-    for variant in HGVS_C_snp_sorted:
-        if variant['effect'] == 'del':
-            if mseq[int(variant['pos'])-1]:
-                mseq[int(variant['pos'])-1] = ""
-        if variant['effect'] == 'ins':
-            mseq.insert(int(variant['pos']), variant['nt'])
-        if variant['effect'] == 'replace':
-            mseq[int(variant['pos'])-1] = variant['nt']
-    mseq[:] = [x for x in mseq if x !='']
-    if translate(''.join(mseq)) == translate(''.join([x for x in str(start_codon[acc+'^'+trx])])):
-        return 'synonymous_variant',acc
-    if len(translate(''.join(mseq))) < 8:
-        return 'toosmall',acc
-    mseq = "".join(mseq)
-    return mseq
-
-def get_m_wtprot(seqname_seq):
-    m_wtprot = list()
-    for prot_mut in seqname_seq:
-        m_wtprot.append(prot_mut.split('@')[0])
-    return m_wtprot
-
-def assembling_headers_sequences(AllProtInMyDB,Msequence,prot_syno,fasta_dict):
-    DB_custom = dict()
-    for acc in AllProtInMyDB:
-        regular_acc = acc.split('@')[0].split('.')[0]
-
-        if acc in Msequence:
-            if regular_acc in prot_syno:
-                header = acc+'|'+str(fasta_dict[prot_syno[regular_acc]].description).split('|')[1]
-                DB_custom[header] = Msequence[acc]
-            else:
-                header = acc+'|'+str(fasta_dict[regular_acc].description).split('|')[1]
-                DB_custom[header] = Msequence[acc]
-        else:
-            if acc in prot_syno:
-                header = acc+'|'+str(fasta_dict[prot_syno[regular_acc]].description).split('|')[1]
-                DB_custom[header] = str(fasta_dict[prot_syno[regular_acc]].seq)
-            else:
-                header = acc+'|'+str(fasta_dict[regular_acc].description).split('|')[1]
-                DB_custom[header] = str(fasta_dict[regular_acc].seq)
-    
     return DB_custom
 
-def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
-    Number_IP = 0
-    Number_IPvar = 0
-    Number_II = 0
-    Number_IIvar = 0
-    Number_ref = 0
-    Number_refvar = 0
-    for acc in DB_custom.keys():
-         if acc[:3]=='IP_':
-            if '@' in acc:
-                Number_IPvar = Number_IPvar+1
-            else:
-                Number_IP = Number_IP+1
-        elif name[:3]=='II_':
-            if '@' in name:
-                Number_IIvar = Number_IIvar+1
-            else:
-                Number_II = Number_II+1      
-        else:
-            if '@' in name:
-                Number_refvar = Number_refvar+1
-            else:
-                Number_ref = Number_ref+1
-    filename = vcf_path.split('/')[-1]
-    path = filename.replace('.vcf','')+'_result/'+expname+'summary.tsv'
-    with open(path, 'w') as f:
-        f.write('effective_threshold\taltProt (IP) \tnovel isoform (II)\trefprot\taltProt_variants (IP) \tnovel isoform_variants (II)\trefprot_variants\n')
-        f.write(effective_threshold+'\t'+Number_IP+'\t'+Number_II+'\t'+refprot+'\t'+Number_IPvar+'\t'+Number_IIvar+'\t'+Number_refvar'\n')
+def remove_fakevariant(seqname_seq,fasta_dict,prot_syno):
 
-def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold):
+    duplicata=list()
+    for acc in fasta_dict: 
+        if acc in prot_syno:
+            if str(fasta_dict[prot_syno[acc]].seq) in seqname_seq.values():
+                duplicata.append([k for k,v in seqname_seq.items() if v == str(fasta_dict[prot_syno[acc]].seq)])
+        else:
+            if str(fasta_dict[acc].seq) in seqname_seq.values():
+                duplicata.append([k for k,v in seqname_seq.items() if v == str(fasta_dict[acc].seq)])
+    flat_duplicata = [seq for sublist in duplicata for seq in sublist]
+    for x in flat_duplicata:
+        del seqname_seq[x]
+    return seqname_seq
+
+def get_start_codon (tsv,tfasta):
+
+    prot_tx_start = dict()
+    with open(tsv,'r')as f:
+        transcrit_prot_ref_start = list()
+        Wtsequence = dict()
+        Prot_gene = dict()
+        for n,l in enumerate(f):
+            if n<2:continue
+            ls = l.split('\t')
+            prot = ls[0]
+            gene = ls[7]
+            start = ls[15]
+            transcrit = ls[12].split('.',1)[0]
+            if transcrit[:4] == 'ENST':
+                if prot[:3] == 'ENS' or prot[:3] == 'IP_' or prot[:3] == 'II_':
+                    info_start = {'transcrit':transcrit,'prot':prot,'start':start}
+                    transcrit_prot_ref_start.append(info_start)
+            
+    Ens_transcripts = Fasta(tfasta,key_function = lambda x: x.split('.')[0],duplicate_action="longest")        
+        
+    for x in transcrit_prot_ref_start:
+        seq = Ens_transcripts[x['transcrit']][int(x['start'])-1:]
+        prot_tx_start[str(x['prot'].split('.',1)[0]+'^'+x['transcrit'])] = seq
+    
+    return prot_tx_start  
+    
+def OpenVar_analysis(vcf_path, expname, specie='human'):
     filename = vcf_path.split('/')[-1]
-    path = filename.replace('.vcf','')+'_result/'+expname+'.fasta'
-    stat_summary(effective_threshold,DB_custom,expname,vcf_path)
-    with open(path, 'w') as f:
-        for acc, prot_seq in DB_custom.items():
-            f.write('>'+acc+'\n')
-            f.write(truncate(prot_seq+'\n'))
-    return print(path+'is done')
+    path = vcf_path.replace(filename,'')
+    vcf = SeqStudy(
+    data_dir   = path, # .../uploads
+    file_name  = filename, # guid.vcf
+    results_dir = filename.replace('.vcf','')+'_result', # .../results/guid/
+    study_name = expname, # user input
+    specie = specie, # user input
+    genome_version = 'hg38', # user input
+    annotation  = 'OP_Ensembl' # user input
+    )
+
+    opv = OpenVar(
+    snpeff_path = '/home/xroucou_group/echange_de_fichiers/snpEff/',
+    vcf         = vcf,
+    )
+    opv.run_snpeff_parallel_pipe()
+    opvr = OPVReport(opv)
+    out = list()
+    for f in opvr.annOnePerLine_files:
+        out.extend(list(opvr.parse_annOnePerLine(f, as_dict=True)))
+    return out    
+
+def parse_protvcf_file(protvariantfile): #get_variant_by_prot
+
+    var_by_prot = defaultdict(list)
+    transcrit_prot = dict()
+    with open(protvariantfile, 'r') as f:
+        for n,l in enumerate(f):
+            if n<1:continue
+            ls = l.split("\t")
+            prot = ls[0]
+            trx = ls[1]
+            HGVS_P = ls[2]
+            HGVS_C = ls[3]
+            Error = ls[4]
+            if prot.count('_')>1:continue
+            if Error!='\n':continue
+            elif {'HGVS_P':HGVS_P,'HGVS_C':HGVS_C,} not in var_by_prot[prot]:
+                var_by_prot[prot].append({'HGVS_P':HGVS_P,'HGVS_C':HGVS_C,})
+                transcrit_prot[prot] = trx
+            
+    return var_by_prot,transcrit_prot
+
+def fastasynonymes(fasta_prot):
+    prot_syno = get_synonyms_prot(fasta_prot)
+    return prot_syno
+
+def get_protvcf_file(parsenpff, expname, vcf_path):
+    parsenpff =sorted(parsenpff, key=lambda x: x['ANN[*].FEATUREID'])
+    filename = vcf_path.split('/')[-1]
+    path = filename.replace('.vcf','')+'_result/'+expname+'_prot.tab'
+    
+    with open(path, 'w') as fwrite:
+        fwrite.write('Prot'+'\t'+'Transcrit'+'\t'+'HGVS_P'+'\t'+'HGVS_C'+'\t'+'Potential_Error'+'\n')
+        for n in parsenpff:
+            if n['ANN[*].HGVS_P']:
+                if '@' in n['ANN[*].FEATUREID']:
+                    prot = n['ANN[*].FEATUREID'].split('@',1)[1]
+                    trans = n['ANN[*].FEATUREID'].split('@',1)[0]
+                    fwrite.write(prot+'\t'+trans+'\t'+n['ANN[*].HGVS_P']+'\t'+n['ANN[*].HGVS_C']+'\t'+n['ANN[*].ERRORS']+'\n')
+                elif '^' in n['ANN[*].FEATUREID']:
+                    prot = n['ANN[*].FEATUREID'].split('^',1)[1]
+                    trans = n['ANN[*].FEATUREID'].split('^',1)[0]
+                    fwrite.write(prot+'\t'+trans+'\t'+n['ANN[*].HGVS_P']+'\t'+n['ANN[*].HGVS_C']+'\t'+n['ANN[*].ERRORS']+'\n')
+                else:continue
+                    
+    return path
+
+def truncate(seq, length=80):
+    return '\n'.join([seq[n:n+length] for n in range(0, len(seq), length)])

@@ -9,9 +9,9 @@ class OpenCMS:
     vcf_path,
     expname,
     input_kallisto = None,
-    trxnumber = None,
-    tpmnumber = None,
-    ipban = None,
+    trxnumber = None,          #10000-1000000
+    tpmnumber = None,          #0-1000000
+    ipban = None,              #yes
     trxsave = None,
     trxexclude = None,
     annotation='ensembl'):
@@ -27,7 +27,17 @@ class OpenCMS:
 
     def run(self, verbose=True):
         if verbose:
-            print('running Openvar...')
+            print('checking files')
+        checkex = checking_trx_files(self.trxexclude)
+        checksv = checking_trx_files(self.trxsave)
+        checkka = abundance_check(self.input_kallisto)
+        if checkex = False:
+            return print('Make sure your exclusion transcrit file is well written')
+        if checksv = False:
+            return print('Make sure your save transcrit file is well written')
+        if checksv = False:
+            return print('Make sure your kallisto-quant file is not corrupted')
+        print('running Openvar...')
         parsed_snpeff = OpenVar_analysis(self.vcf_path, self.expname)
         print('Parsing...')
         protvariantfile = get_protvcf_file(parsed_snpeff, self.expname, self.vcf_path)
@@ -41,14 +51,36 @@ class OpenCMS:
         print('phase2')
         if self.input_kallisto:
             print('started')
-            trx_allprot= append_wt_prot_to_transcrit_by_fasta(OP_protein_fasta)
+            trx_allprot= append_wt_prot_to_transcrit_by_fasta(OP_protein_fasta,self.ipban)
             print('append_wt_prot_to_transcrit_ENS done')
             trx_allprot= get_mutated_protbytranscrit(seqname_seq,transcrit_prot,trx_allprot)
             print('get_mutated_protbytranscrit done')
-            AllProtInMyDB = get_100_prot(self.input_kallisto, prot_syno,trx_allprot, self.trxnumber, self.trxsave, self.tpmnumber, self.trxeclude)
+            AllProtInMyDB,  effective_threshold = get_100_prot(self.input_kallisto, prot_syno,trx_allprot, self.trxnumber, self.trxsave, self.tpmnumber, self.trxexclude)
             DB_custom = assembling_headers_sequences(AllProtInMyDB,seqname_seq,prot_syno,fasta_dict)
             DB_custom = remove_duplicata_from_db(DB_custom)
-            write_Fasta_DB(DB_custom, self.expname, self.vcf_path)
+            write_Fasta_DB(DB_custom, self.expname, self.vcf_path,effective_threshold)
+
+def abundance_check(input_kallisto):
+    if input_kallisto:
+        with open(input_kallisto, 'r') as f:
+            for n,l in enumerate(f):
+                if n == 0:
+                    if l != 'target_id\tlength\teff_length\test_counts\ttpm\n':
+                        return False
+                else:
+                    if len(l.split('\t'))!=4:
+                        return False
+    return True
+
+def checking_trx_files(trxfile):
+    if trxfile:
+        with open(trxfile, 'r') as f:
+            for n,l in enumerate(f):
+                if l[0:4] != 'ENST' and if l[0:3] != 'NM_' and if l[0:3] != 'XM_':
+                    return False
+                if len(l)>40
+                    return False
+    return True
 
 def get_all_mut_sequences(var_by_prot,transcrit_prot,start_codon,fasta_dict,prot_syno,ipban):
     seqname_seq=dict()
@@ -73,7 +105,7 @@ def get_all_mut_sequences(var_by_prot,transcrit_prot,start_codon,fasta_dict,prot
     seqname_seq=remove_fakevariant(seqname_seq,fasta_dict,prot_syno)
     return seqname_seq
 
-def append_wt_prot_to_transcrit_by_fasta (fasta):
+def append_wt_prot_to_transcrit_by_fasta (fasta,ipban):
     trx_allprot = defaultdict(list)
     with open(fasta, 'r')as f:
         for n,l in enumerate(f):
@@ -83,11 +115,13 @@ def append_wt_prot_to_transcrit_by_fasta (fasta):
             prxs=parsedheader['PA'].split(',')
             for trx in trxs:
                 for prx in prxs:
+                    if ipban == "yes":
+                        if prx[0:3]=='II_' or prx [0:3]=='IP_':continue
                     trx_allprot[trx.split('.')[0]].append(prx.split('.')[0])
     return trx_allprot
 
-def get_100_prot(trx_expression,prot_syno,trx_allprot,trxnumber,trxsave,tpmnumber,trxeclude):
-    trx_expression_sorted = get_trxs_by_tpm_from_kallisto(trx_expression,trxeclude)
+def get_100_prot(trx_expression,prot_syno,trx_allprot,trxnumber,trxsave,tpmnumber,trxexclude):
+    trx_expression_sorted = get_trxs_by_tpm_from_kallisto(trx_expression,trxexclude)
     AllProtInMyDB = set()
     
     if trxnumber:
@@ -108,7 +142,7 @@ def get_100_prot(trx_expression,prot_syno,trx_allprot,trxnumber,trxsave,tpmnumbe
                         print('not_taken',prot,y)
                 else:
                     print(prot,tpm)
-                    return(AllProtInMyDB)
+                    return(AllProtInMyDB,tpm)
         else:
             for y in trx_allprot[prot]:    
                 if len(AllProtInMyDB)<treshold:
@@ -121,25 +155,25 @@ def get_100_prot(trx_expression,prot_syno,trx_allprot,trxnumber,trxsave,tpmnumbe
                         print('not_taken',prot,y)
                 else:
                     print(prot,tpm)
-                    return(AllProtInMyDB)
+                    return(AllProtInMyDB,tpm)
     if trxsave:
         with open(trxsave, 'r') as f:
             for n,l in enumerate(f):
-                for y in trx_allprot[l]:
+                for y in trx_allprot[l.split('.')[0]]:
                     if y in prot_syno:
                         if prot_syno[y] not in AllProtInMyDB:
                             AllProtInMyDB.add(prot_syno[y])
                     else:
                         AllProtInMyDB.add(y)
-                
-    return(AllProtInMyDB)
+    print(prot,tpm)            
+    return(AllProtInMyDB,tpm)
 
-def get_trxs_by_tpm_from_kallisto (trx_expression,trxeclude):
-    if trxeclude:
+def get_trxs_by_tpm_from_kallisto (trx_expression,trxexclude):
+    if trxexclude:
         liste_exclusion = list()
-        with open(trxeclude, 'r') as fex:
+        with open(trxexclude, 'r') as fex:
             for n,l in enumerate(fex):
-                liste_exclusion.append(l.split('\n')[0])
+                liste_exclusion.append(l.split('\n')[0].split('.')[0])
     else :
         liste_exclusion = " "
         
@@ -214,9 +248,39 @@ def assembling_headers_sequences(AllProtInMyDB,Msequence,prot_syno,fasta_dict):
     
     return DB_custom
 
-def write_Fasta_DB(DB_custom,expname,vcf_path):
+def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
+    Number_IP = 0
+    Number_IPvar = 0
+    Number_II = 0
+    Number_IIvar = 0
+    Number_ref = 0
+    Number_refvar = 0
+    for acc in DB_custom.keys():
+         if acc[:3]=='IP_':
+            if '@' in acc:
+                Number_IPvar = Number_IPvar+1
+            else:
+                Number_IP = Number_IP+1
+        elif name[:3]=='II_':
+            if '@' in name:
+                Number_IIvar = Number_IIvar+1
+            else:
+                Number_II = Number_II+1      
+        else:
+            if '@' in name:
+                Number_refvar = Number_refvar+1
+            else:
+                Number_ref = Number_ref+1
+    filename = vcf_path.split('/')[-1]
+    path = filename.replace('.vcf','')+'_result/'+expname+'summary.tsv'
+    with open(path, 'w') as f:
+        f.write('effective_threshold\taltProt (IP) \tnovel isoform (II)\trefprot\taltProt_variants (IP) \tnovel isoform_variants (II)\trefprot_variants\n')
+        f.write(effective_threshold+'\t'+Number_IP+'\t'+Number_II+'\t'+refprot+'\t'+Number_IPvar+'\t'+Number_IIvar+'\t'+Number_refvar'\n')
+
+def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold):
     filename = vcf_path.split('/')[-1]
     path = filename.replace('.vcf','')+'_result/'+expname+'.fasta'
+    stat_summary(effective_threshold,DB_custom,expname,vcf_path)
     with open(path, 'w') as f:
         for acc, prot_seq in DB_custom.items():
             f.write('>'+acc+'\n')
