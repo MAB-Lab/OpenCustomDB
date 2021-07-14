@@ -76,7 +76,7 @@ def checking_trx_files(trxfile):
     if trxfile:
         with open(trxfile, 'r') as f:
             for n,l in enumerate(f):
-                if l[0:4] != 'ENST' and if l[0:3] != 'NM_' and if l[0:3] != 'XM_':
+                if l[0:4] != 'ENST' and  l[0:3] != 'NM_' and  l[0:3] != 'XM_':
                     return False
                 if len(l)>40
                     return False
