@@ -276,7 +276,6 @@ def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
     with open(path, 'w') as f:
         f.write('effective_threshold\taltProt (IP) \tnovel isoform (II)\trefprot\taltProt_variants (IP) \tnovel isoform_variants (II)\trefprot_variants\n')
         f.write(effective_threshold+'\t'+Number_IP+'\t'+Number_II+'\t'+refprot+'\t'+Number_IPvar+'\t'+Number_IIvar+'\t'+Number_refvar'\n')
-
 def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold):
     filename = vcf_path.split('/')[-1]
     path = filename.replace('.vcf','')+'_result/'+expname+'.fasta'
