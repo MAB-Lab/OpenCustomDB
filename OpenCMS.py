@@ -35,7 +35,7 @@ class OpenCMS:
             return print('Make sure your exclusion transcrit file is well written')
         if checksv == False:
             return print('Make sure your save transcrit file is well written')
-        if checksv == False:
+        if checkka == False:
             return print('Make sure your kallisto-quant file is not corrupted')
         print('running Openvar...')
         parsed_snpeff = OpenVar_analysis(self.vcf_path, self.expname)
@@ -256,18 +256,18 @@ def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
     Number_ref = 0
     Number_refvar = 0
     for acc in DB_custom.keys():
-         if acc[:3]=='IP_':
+        if acc[:3]=='IP_':
             if '@' in acc:
                 Number_IPvar = Number_IPvar+1
             else:
                 Number_IP = Number_IP+1
-        elif name[:3]=='II_':
-            if '@' in name:
+        elif acc[:3]=='II_':
+            if '@' in acc:
                 Number_IIvar = Number_IIvar+1
             else:
                 Number_II = Number_II+1      
         else:
-            if '@' in name:
+            if '@' in acc:
                 Number_refvar = Number_refvar+1
             else:
                 Number_ref = Number_ref+1
@@ -275,7 +275,8 @@ def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
     path = filename.replace('.vcf','')+'_result/'+expname+'summary.tsv'
     with open(path, 'w') as f:
         f.write('effective_threshold\taltProt (IP) \tnovel isoform (II)\trefprot\taltProt_variants (IP) \tnovel isoform_variants (II)\trefprot_variants\n')
-        f.write(effective_threshold+'\t'+Number_IP+'\t'+Number_II+'\t'+refprot+'\t'+Number_IPvar+'\t'+Number_IIvar+'\t'+Number_refvar'\n')
+        f.write(effective_threshold+'\t'+Number_IP+'\t'+Number_II+'\t'+Number_ref+'\t'+Number_IPvar+'\t'+Number_IIvar+'\t'+Number_refvar+'\n')
+
 def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold):
     filename = vcf_path.split('/')[-1]
     path = filename.replace('.vcf','')+'_result/'+expname+'.fasta'
