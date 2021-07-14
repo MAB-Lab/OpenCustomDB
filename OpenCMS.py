@@ -31,11 +31,11 @@ class OpenCMS:
         checkex = checking_trx_files(self.trxexclude)
         checksv = checking_trx_files(self.trxsave)
         checkka = abundance_check(self.input_kallisto)
-        if checkex = False:
+        if checkex == False:
             return print('Make sure your exclusion transcrit file is well written')
-        if checksv = False:
+        if checksv == False:
             return print('Make sure your save transcrit file is well written')
-        if checksv = False:
+        if checksv == False:
             return print('Make sure your kallisto-quant file is not corrupted')
         print('running Openvar...')
         parsed_snpeff = OpenVar_analysis(self.vcf_path, self.expname)
