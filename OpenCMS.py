@@ -20,7 +20,7 @@ class OpenCMS:
         self.input_kallisto = input_kallisto
         self.trxnumber = trxnumber
         self.tpmnumber = tpmnumber
-        self.annotation=annotation
+        self.annotation = annotation
         self.ipban = ipban
         self.trxsave = trxsave
         self.trxexclude = trxexclude
@@ -68,7 +68,7 @@ def abundance_check(input_kallisto):
                     if l != 'target_id\tlength\teff_length\test_counts\ttpm\n':
                         return False
                 else:
-                    if len(l.split('\t'))!=4:
+                    if len(l.split('\t'))!=5:
                         return False
     return True
 
