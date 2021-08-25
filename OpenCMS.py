@@ -130,15 +130,15 @@ def get_100_prot(trx_expression,prot_syno,trx_allprot,trxnumber,trxsave,tpmnumbe
         treshold = 100000
     for prot,tpm in trx_expression_sorted.items():
         if tpmnumber:
-            if tpm<tpmnumber:continue
-            for y in trx_allprot[prot]:    
-                if y in prot_syno:
-                    if prot_syno[y] not in AllProtInMyDB:
-                        AllProtInMyDB.add(prot_syno[y])
-                else:
-                    AllProtInMyDB.add(y)
-                if y not in AllProtInMyDB and prot_syno[y] not in AllProtInMyDB:
-                    print('not_taken',prot,y)
+            if tpm>tpmnumber:
+                for y in trx_allprot[prot]:    
+                    if y in prot_syno:
+                        if prot_syno[y] not in AllProtInMyDB:
+                            AllProtInMyDB.add(prot_syno[y])
+                    else:
+                        AllProtInMyDB.add(y)
+                    if y not in AllProtInMyDB and prot_syno[y] not in AllProtInMyDB:
+                        print('not_taken',prot,y)
             else:
                 print(prot,tpm)
                 return(AllProtInMyDB,tpm)
