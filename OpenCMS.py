@@ -82,6 +82,27 @@ def checking_trx_files(trxfile):
                     return False
     return True
 
+def differentiate_syno_missense(regroupement_HGVS_P):
+    HGVS_P_missense=list()
+    HGVS_P_synonyme=list()
+    for HGVS_P in regroupement_HGVS_P:
+        firstcodon=list()
+        secondcodon=list()
+        separator=list()
+        for c in HGVS_P:
+            if c.isalpha() or c=='?' or c=='*' or c=='_':
+                if len(separator)>0:
+                    secondcodon.append(c)
+                else:
+                    firstcodon.append(c)
+            elif not c.isalpha():
+                separator.append(c)       
+        if ''.join(firstcodon) != ''.join(secondcodon):
+            HGVS_P_missense.append(HGVS_P)
+        else:
+            HGVS_P_synonyme.append(HGVS_P)
+    return(HGVS_P_missense,HGVS_P_synonyme)
+
 def get_all_mut_sequences(var_by_prot,transcrit_prot,start_codon,fasta_dict,prot_syno,ipban):
     seqname_seq=dict()
     for acc,svar in var_by_prot.items():
@@ -94,8 +115,12 @@ def get_all_mut_sequences(var_by_prot,transcrit_prot,start_codon,fasta_dict,prot
             parsed_HGVS_P = var['HGVS_P'].split('.',1)[1]
             regroupement_HGVS_C.extend(parsed_HGVS_C)
             regroupement_HGVS_P.append(parsed_HGVS_P)
+        HGVS_P_missense,HGVS_P_synonyme=differentiate_syno_missense(regroupement_HGVS_P)
         sorted_HGVS_C = sort_sequences(regroupement_HGVS_C)
-        seqname = acc+'@'+''.join(regroupement_HGVS_P)
+        if len(HGVS_P_synonyme)>0:
+            seqname = acc+'@'+''.join(HGVS_P_missense)+'['+''.join(HGVS_P_synonyme)+']'
+        else:
+            seqname = acc+'@'+''.join(HGVS_P_missense)
         mutated_sequence = modify_transcript_sequence(sorted_HGVS_C,acc,transcrit_prot,start_codon)
         translated_mutated_sequence = translate(mutated_sequence)
         if 'synonymous_variant' in mutated_sequence or translated_mutated_sequence == 'start_lost' or len(translated_mutated_sequence)<7:continue
