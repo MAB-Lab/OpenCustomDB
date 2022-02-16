@@ -309,4 +309,4 @@ def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold):
         for acc, prot_seq in DB_custom.items():
             f.write('>'+acc+'\n')
             f.write(truncate(prot_seq+'\n'))
-    return print(path+'is done')
+    return path
