@@ -7,6 +7,7 @@ import Bio
 import pyfaidx
 import pickle
 import sys
+import csv
 from pyfaidx import FastaVariant, Fasta
 from Bio import SeqIO
 from collections import defaultdict

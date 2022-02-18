@@ -82,6 +82,18 @@ def checking_trx_files(trxfile):
                     return False
     return True
 
+def checking_tsv_annotated(annotated_tsv):
+    if annotated_tsv:
+        with open(annotated_tsv, 'r') as f:
+            for n,l in enumerate(f):
+                if n == 0:
+                    if l != 'Prot\tTranscrit\tHGVS_P\tHGVS_C\tPotential_Error\n':
+                        return False
+                else:
+                    if len(l.split('\t'))!=5:
+                        return False
+    return True
+
 def differentiate_syno_missense(regroupement_HGVS_P):
     HGVS_P_missense=list()
     HGVS_P_synonyme=list()
