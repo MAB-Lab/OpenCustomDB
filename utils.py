@@ -198,12 +198,12 @@ def fastasynonymes(fasta_prot):
     prot_syno = get_synonyms_prot(fasta_prot)
     return prot_syno
 
-def get_protvcf_file(parsenpff, expname, vcf_path):
+def get_protvcf_file(parsenpff, expname, vcf_path, result_path):
     parsenpff =sorted(parsenpff, key=lambda x: x['ANN[*].FEATUREID'])
-    filename = vcf_path.split('/')[-1]
-    path = filename.replace('.vcf','')+'_result/'+expname+'_prot.tab'
+    #filename = vcf_path.split('/')[-1]
+    rpath = os.path.join(result_path, (expname + '_prot.tab'))
     
-    with open(path, 'w') as fwrite:
+    with open(rpath, 'w') as fwrite:
         fwrite.write('Prot'+'\t'+'Transcrit'+'\t'+'HGVS_P'+'\t'+'HGVS_C'+'\t'+'Potential_Error'+'\n')
         for n in parsenpff:
             if n['ANN[*].HGVS_P']:
@@ -217,7 +217,7 @@ def get_protvcf_file(parsenpff, expname, vcf_path):
                     fwrite.write(prot+'\t'+trans+'\t'+n['ANN[*].HGVS_P']+'\t'+n['ANN[*].HGVS_C']+'\t'+n['ANN[*].ERRORS']+'\n')
                 else:continue
                     
-    return path
+    return rpath
 
 def truncate(seq, length=80):
     return '\n'.join([seq[n:n+length] for n in range(0, len(seq), length)])
