@@ -1,8 +1,6 @@
+import os
 from OpenCustomDB.utils import *
 from OpenCustomDB.SNP_handle import *
-#OP_protein_fasta = '/home/noeguill/OpenCMS/Databases/OpenProt_DB_Ensemble_1_6.fasta'
-#transcrit_fasta = '/home/noeguill/OpenCMS/Databases/gencode.v29.transcripts.fa'
-#OP_tsv = '/home/noeguill/OpenCMS/Databases/human-openprot-r1_6-refprots+altprots+isoforms-ensembleonly.tsv'
 
 class OpenCMS:
     def __init__(self, 
@@ -284,7 +282,7 @@ def assembling_headers_sequences(AllProtInMyDB,Msequence,prot_syno,fasta_dict):
     
     return DB_custom
 
-def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
+def stat_summary(effective_threshold,DB_custom,expname,vcf_path, result_path):
     Number_IP = 0
     Number_IPvar = 0
     Number_II = 0
@@ -307,18 +305,20 @@ def stat_summary(effective_threshold,DB_custom,expname,vcf_path):
                 Number_refvar = Number_refvar+1
             else:
                 Number_ref = Number_ref+1
-    filename = vcf_path.split('/')[-1]
-    path = filename.replace('.vcf','')+'_result/'+expname+'summary.tsv'
-    with open(path, 'w') as f:
+    #filename = vcf_path.split('/')[-1]
+    #path = filename.replace('.vcf','')+'_result/'+expname+'summary.tsv'
+    rpath = os.path.join(result_path, (expname + 'summary.tsv'))
+    with open(rpath, 'w') as f:
         f.write('effective_threshold\taltProt (IP) \tnovel isoform (II)\trefprot\taltProt_variants (IP) \tnovel isoform_variants (II)\trefprot_variants\n')
         f.write(str(effective_threshold)+'\t'+str(Number_IP)+'\t'+str(Number_II)+'\t'+str(Number_ref)+'\t'+str(Number_IPvar)+'\t'+str(Number_IIvar)+'\t'+str(Number_refvar)+'\n')
 
-def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold):
-    filename = vcf_path.split('/')[-1]
-    path = filename.replace('.vcf','')+'_result/'+expname+'.fasta'
-    stat_summary(effective_threshold,DB_custom,expname,vcf_path)
-    with open(path, 'w') as f:
+def write_Fasta_DB(DB_custom,expname,vcf_path,effective_threshold, result_path):
+    #filename = vcf_path.split('/')[-1]
+    #path = filename.replace('.vcf','')+'_result/'+expname+'.fasta'
+    rpath = os.path.join(result_path, (expname + '.fasta'))
+    stat_summary(effective_threshold,DB_custom,expname,vcf_path, result_path)
+    with open(rpath, 'w') as f:
         for acc, prot_seq in DB_custom.items():
             f.write('>'+acc+'\n')
             f.write(truncate(prot_seq+'\n'))
-    return path
+    return rpath
