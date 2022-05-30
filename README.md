@@ -85,3 +85,4 @@ OPCMS.run()
 ## TestFile
 For testing purposes a VCF file and a kallisto output file are available on this github for testing purposes
 Test_VCF_OCDB_humanHG38.vcf
+kallisto_test_file_human_hg38.tsv
