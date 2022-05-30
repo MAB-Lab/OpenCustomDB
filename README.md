@@ -9,7 +9,7 @@ To submit an analysis, click on the Run Analysis tab on the menu bar. You should
 ![image](https://user-images.githubusercontent.com/65976013/170891347-5886043a-0057-4b10-b039-da6ddfcd9314.png)
 
 
-In the first two boxes, you are asked to enter **an email adress** , which will be used to send you a unique link to the results of your analysis; and **a study name**, which will be used to refer to your analysis. Then, you are asked to select the adequate parameters for your analysis. As OpenCustomDB starts either from an **unannotated VCF file** or an annotated VCF in tsv format, these parameters should be the one used to build the inputs file. You will have to select the species you are working with, the genome assembly used (please note the differences between hg38, hg19 and b37) and the genome build you wish to use to annotate your VCF file (common or deep genome annotation).
+In the first two boxes, you are asked to enter **an email adress** , which will be used to send you a unique link to the results of your analysis; and **a study name**, which will be used to refer to your analysis. Then, you are asked to select the adequate parameters for your analysis. As OpenCustomDB starts either from an **unannotated VCF file** or an annotated VCF in tsv format, these parameters should be the one used to build the inputs file. You will have to select the species you are working with, the genome assembly used (please note the differences between hg38, hg19 and b37) and the genome build you wish to use to annotate your VCF file (common or deep genome annotation).	
 Before clicking on "Run analysis", you must upload your mandatory inputs (see section below). A progress bar will appear and a message confirming the upload of your data will be displayed if the upload was completed successfully!
  Once your analysis has been successfully submitted, a blue box will appear at the bottom of your screen. The link in this box is unique to your analysis and will be emailed to you once the analysis is done.
  
@@ -53,7 +53,9 @@ OpenCustomDB output folder contains the following:
 ## Command line.
 
 OpenCustomDB is also available in command line.
-You can download OpenCustomDB with all the databases needed here :
+
+You can download OpenCustomDB with all the databases needed here : https://www.dropbox.com/s/3hu2uh42kz1rxba/OpenCustomDatabase.zip?dl=0
+
 Then Follow the instruction below.
 **Launch from Python as shown below :**
 
