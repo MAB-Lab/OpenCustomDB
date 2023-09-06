@@ -54,7 +54,7 @@ OpenCustomDB output folder contains the following:
 
 OpenCustomDB is also available in command line.
 
-You can download OpenCustomDB with all the databases needed here : https://www.dropbox.com/s/3hu2uh42kz1rxba/OpenCustomDatabase.zip?dl=0
+You can download OpenCustomDB with all the databases needed here : https://api.openprot.org/api/2.0/files/OpenCustomDB/OpenCustomDatabase.zip
 
 Then Follow the instruction below.
 **Launch from Python as shown below :**
